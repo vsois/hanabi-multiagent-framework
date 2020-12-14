@@ -14,9 +14,8 @@ class HanabiParallelEnvironment:
     def __init__(self, env_config: Dict[str, str], n_parallel: int):
         self._parallel_env = pyhanabi.HanabiParallelEnv(env_config, n_parallel)
         self.n_players = self._parallel_env.parent_game.num_players
-        self.step_types = None
-        self.last_observation = None
-
+        self.step_type = None
+        
     def step(self,
              actions: Union[List[pyhanabi.HanabiMove], List[int]],
              agent_id: int
@@ -32,7 +31,7 @@ class HanabiParallelEnvironment:
               - step_type array
         """
 
-        last_score = np.array(self._parallel_env.get_scores())
+        last_score = np.array(self._parallel_env.get_score())
 
         # Detect any illegal moves
         #  moves_illegal = np.logical_not(self._parallel_env.moves_are_legal(actions))
@@ -44,29 +43,33 @@ class HanabiParallelEnvironment:
         # illegal moves as follows:
         # Illegal moves are considered as loosing the game immediately and are punished as such.
         # The corresponding states are marked as terminal and should be restarted.
-        self._parallel_env.step(actions, agent_id, (agent_id + 1) % self.n_players)
-        moves_illegal = self._parallel_env.illegal_moves
+        
+        obs = self._parallel_env.observe_agent(agent_id)
+
+        illegal_moves = self._parallel_env.step(actions, agent_id)
+        #print('illegal moves', illegal_moves)
+        #self._parallel_env.step(actions, agent_id)
 
         # Observe next agent
-        self.last_observation = self._parallel_env.state_observations
-        score = np.array(self._parallel_env.get_scores())
+        obs = self._parallel_env.observe_agent(agent_id)
+        
+        score = np.array(self._parallel_env.get_score())
 
         # Reward is the score differential. May be large and negative at game end.
         reward = score - last_score
         # illegal moves are punished as loosing the game
-        reward[moves_illegal] = -last_score[moves_illegal]
+        reward[illegal_moves] = -last_score[illegal_moves]
+        
+        game_finished = np.array(self._parallel_env.get_state_status()) \
+            != pyhanabi.HanabiState.EndOfGameType.kNotFinished
+        #print('game finished', game_finished)
 
-        terminal = np.logical_or(
-            moves_illegal,
-            np.array(self._parallel_env.get_state_statuses()) \
-                != pyhanabi.HanabiState.EndOfGameType.kNotFinished)
+        terminal = np.logical_or(illegal_moves, game_finished)
 
-        self.step_types = np.full((self.num_states,), StepType.MID)
-        self.step_types[terminal] = StepType.LAST
+        self.step_type = np.full((self.num_states,), StepType.MID)
+        self.step_type[terminal] = StepType.LAST
 
-        return (self.last_observation,
-                reward,
-                self.step_types)
+        return (obs, reward, np.copy(self.step_type))
 
     @property
     def game_config(self):
@@ -106,13 +109,18 @@ class HanabiParallelEnvironment:
         Returns:
             observation: (vectorized observation, legal moves)
         """
-        self._parallel_env.reset_states(states, current_agent_id)
-        self.last_observation = self._parallel_env.observe_agent(current_agent_id)
-        self.step_types[states] = StepType.FIRST
-        return (self.last_observation,
-                self.step_types)
+        self._parallel_env.reset_state(states, current_agent_id)
+        obs = self._parallel_env.observe_agent(current_agent_id)
+        self.step_type[states] = StepType.FIRST
+        return (obs, np.copy(self.step_type))
+        
+    def observe_agent(self, agent_id):
+        return self._parallel_env.observe_agent(agent_id)
+    
+    def observe_states(self, agent_id, states):
+        return [self._parallel_env.observe_agent(agent_id, idx) for idx in states]
 
-    def reset(self) -> Tuple[np.ndarray, np.ndarray]:
+    def reset(self) -> np.ndarray:
         """Resets the environment for a new game. Should be called once after
         the instatiation of this env to retrieve initial observations.
 
@@ -120,13 +128,18 @@ class HanabiParallelEnvironment:
             observation: (vectorized observation, legal moves)
         """
         self._parallel_env.reset()
-        self.last_observation = self._parallel_env.observe_agent(0)
-        self.step_types = np.full((self.num_states,), StepType.FIRST)
-        return self.last_observation
+        obs = self._parallel_env.observe_agent(0)
+        self.step_type = np.full((self.num_states,), StepType.FIRST)
+        return obs
+    
+    def encode(self, obs):
+        vec_obs = np.array(self._parallel_env.encode_observation(obs))
+        vec_lms = np.array(self._parallel_env.encode_legal_moves(obs))
+        return (vec_obs, vec_lms)
     
     def get_moves(self, uids):
         """convert uids to hanabi move objects"""
-        return self._parallel_env.get_moves(uids)
+        return self._parallel_env.get_move(uids)
 
     @property
     def max_moves(self):
@@ -136,7 +149,7 @@ class HanabiParallelEnvironment:
     @property
     def observation_len(self):
         """length of the vectorized observation of a single state"""
-        return self._parallel_env.get_observation_flat_length()
+        return self._parallel_env.encoded_observation_flat_length()
 
     @property
     def num_states(self):
