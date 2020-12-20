@@ -100,6 +100,7 @@ class HanabiParallelSession:
 #         total_reveal_moves = np.zeros((self.n_states,))
 #         total_risky_moves = np.zeros((self.n_states,))
 #         total_bad_discards = np.zeros((self.n_states))
+        state_info = []
         step_rewards = []
 #         playability = [[] for i in range(self.n_states)]
 #         move_eval = [[] for i in range(self.n_states)]
@@ -120,6 +121,16 @@ class HanabiParallelSession:
 
             obs = self.preprocess_obs_for_agent(obs_raw, agent, self.stacker_eval[agent_id])
             actions = agent.exploit(obs)
+            
+            # calculate level and add basic info
+            level_obs, level_info = agent.shape_level(obs)
+            for i, action in enumerate(actions):
+                level_info[i]['action'] = action
+                level_info[i]['step'] = step
+                level_info[i]['state'] = i   
+            #print(level_info[valid_states])
+            
+            state_info.extend(level_info[valid_states])
 
             #moves = self.parallel_env.get_moves(actions)
             # get shaped rewards
@@ -148,7 +159,14 @@ class HanabiParallelSession:
             
             # get new observation based on action
             obs_raw, reward, step_types = self.parallel_env.step(actions, agent_id)
-
+            obs = self.preprocess_obs_for_agent(obs_raw, agent)
+            level_obs, level_info = agent.shape_level(obs)
+            for i, action in enumerate(actions):
+                level_info[i]['action'] = -1
+                level_info[i]['step'] = step+1
+                level_info[i]['state'] = i
+             
+            
             # convert moves
 #             play_moves = [1 if m.move_type == pyhanabi.HanabiMove.Type.kPlay else 0
 #                           for m in moves]
@@ -166,6 +184,8 @@ class HanabiParallelSession:
 #             total_bad_discards[valid_states] += bad_discards[valid_states]
 
             done = np.logical_or(done, step_types == StepType.LAST)
+            state_info.extend(level_info[valid_states==done])  
+            
             if print_intermediate:
 #                 step_rewards.append({"terminated": np.sum(done),
 #                     "risky": np.sum(risky_moves[valid_states]),
@@ -187,6 +207,7 @@ class HanabiParallelSession:
         if dest is not None:
             np.save(dest + "_step_rewards.npy", step_rewards)
             np.save(dest + "_total_rewards.npy", total_reward)
+            np.save(dest + "_level_info.npy", state_info)
 #             np.save(dest + "_move_eval.npy", {"play": total_play_moves,
 #                 "risky": total_risky_moves,
 #                 "bad_discard": total_bad_discards,
@@ -267,9 +288,9 @@ class HanabiParallelSession:
                 #print('last step', is_last_step)
                 
                 # level of input observation
-                level_obs1 = agent.shape_level(self.last_observations[agent_id])
+                level_obs1 = agent.shape_level(self.last_observations[agent_id])[0]
                 # level of output observation
-                level_obs2 = agent.shape_level(obs)
+                level_obs2 = agent.shape_level(obs)[0]
                 # replace terminal observation level values with precalculated levels
                 level_obs2[is_last_step] = self.terminal_level[agent_id]['level']
                 
