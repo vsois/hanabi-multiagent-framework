@@ -255,7 +255,7 @@ class HanabiParallelSession:
             for id in range(self.parallel_env.num_players):
                 terminal_obs_raw = self.parallel_env.observe_states(id, terminal)
                 terminal_obs = self.preprocess_obs_for_agent(terminal_obs_raw, self.agents.agents[id]) # no stacking!
-                terminal_level = agent.shape_level(terminal_obs)
+                terminal_level = agent.shape_level(terminal_obs)[0]
                 
                 # append to memory, so only the first terminal obs within round is stored
                 add = np.logical_not(np.in1d(terminal, self.terminal_level[id]['index']))
