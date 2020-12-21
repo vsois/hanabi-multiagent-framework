@@ -362,7 +362,6 @@ class HanabiParallelSession:
         """
         self.run(n_warmup)
         for _ in range(n_iter):
-            print(_, end='\r')
             self.run(n_sim_steps)
             for _ in range(n_train_steps):
                 for agent in self.agents.agents:
