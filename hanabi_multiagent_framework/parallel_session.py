@@ -160,11 +160,11 @@ class HanabiParallelSession:
             # get new observation based on action
             obs_raw, reward, step_types = self.parallel_env.step(actions, agent_id)
             obs = self.preprocess_obs_for_agent(obs_raw, agent)
-            level_obs, level_info = agent.shape_level(obs)
-            for i, action in enumerate(actions):
-                level_info[i]['action'] = -1
-                level_info[i]['step'] = step+1
-                level_info[i]['state'] = i
+#             level_obs, level_info = agent.shape_level(obs)
+#             for i, action in enumerate(actions):
+#                 level_info[i]['action'] = -1
+#                 level_info[i]['step'] = step+1
+#                 level_info[i]['state'] = i
              
             
             # convert moves
@@ -252,17 +252,17 @@ class HanabiParallelSession:
             
             # get the level values of terminal observations from each agents pov
             # for each agent get the terminal state observation
-            for id in range(self.parallel_env.num_players):
-                terminal_obs_raw = self.parallel_env.observe_states(id, terminal)
-                terminal_obs = self.preprocess_obs_for_agent(terminal_obs_raw, self.agents.agents[id]) # no stacking!
-                terminal_level = agent.shape_level(terminal_obs)[0]
-                
-                # append to memory, so only the first terminal obs within round is stored
-                add = np.logical_not(np.in1d(terminal, self.terminal_level[id]['index']))
-                self.terminal_level[id]['index'] = \
-                    np.append(self.terminal_level[id]['index'], terminal[add])
-                self.terminal_level[id]['level'] = \
-                    np.append(self.terminal_level[id]['level'], terminal_level[add])
+#             for id in range(self.parallel_env.num_players):
+#                 terminal_obs_raw = self.parallel_env.observe_states(id, terminal)
+#                 terminal_obs = self.preprocess_obs_for_agent(terminal_obs_raw, self.agents.agents[id]) # no stacking!
+#                 terminal_level = agent.shape_level(terminal_obs)[0]
+#                 
+#                 # append to memory, so only the first terminal obs within round is stored
+#                 add = np.logical_not(np.in1d(terminal, self.terminal_level[id]['index']))
+#                 self.terminal_level[id]['index'] = \
+#                     np.append(self.terminal_level[id]['index'], terminal[add])
+#                 self.terminal_level[id]['level'] = \
+#                     np.append(self.terminal_level[id]['level'], terminal_level[add])
                 
                 
             # reset terminal states
@@ -288,18 +288,18 @@ class HanabiParallelSession:
                 #print('last step', is_last_step)
                 
                 # level of input observation
-                level_obs1 = agent.shape_level(self.last_observations[agent_id])[0]
+                #level_obs1 = agent.shape_level(self.last_observations[agent_id])[0]
                 # level of output observation
-                level_obs2 = agent.shape_level(obs)[0]
+                #level_obs2 = agent.shape_level(obs)[0]
                 # replace terminal observation level values with precalculated levels
-                level_obs2[is_last_step] = self.terminal_level[agent_id]['level']
+                #level_obs2[is_last_step] = self.terminal_level[agent_id]['level']
                 
-                add_rewards = level_obs2 - level_obs1
+                #add_rewards = level_obs2 - level_obs1
                 
                 #add_rewards = agent.shape_rewards(self.last_observations[agent_id], obs)
                 #print(add_rewards)
                 #self.agent_cum_rewards[agent_id][is_last_step==False,:] + add_rewards.reshape(-1, 1)[is_last_step==False, :]
-                shaped_rewards = self.agent_cum_rewards[agent_id] + add_rewards.reshape(-1, 1)
+                shaped_rewards = self.agent_cum_rewards[agent_id] #+ add_rewards.reshape(-1, 1)
                 
                 # add observation to agent
                 agent.add_experience(
@@ -315,7 +315,7 @@ class HanabiParallelSession:
                 self.stacker[agent_id].reset_history(is_last_step)
                 obs = self.update_obs_for_agent(obs, agent, self.stacker[agent_id])  
             # reset the memory of terminal state levels
-            self.terminal_level[agent_id] = {'index': np.array([]), 'level': np.array([])}         
+            #self.terminal_level[agent_id] = {'index': np.array([]), 'level': np.array([])}         
             
             actions = agent.explore(obs)
             
