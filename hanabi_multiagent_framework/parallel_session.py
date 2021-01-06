@@ -128,7 +128,7 @@ class HanabiParallelSession:
                 level_info[i]['action'] = action
                 level_info[i]['step'] = step
                 level_info[i]['state'] = i   
-            #print(level_info[valid_states])
+            # print(level_info[valid_states])
             
             state_info.extend(level_info[valid_states])
 
@@ -159,12 +159,16 @@ class HanabiParallelSession:
             
             # get new observation based on action
             obs_raw, reward, step_types = self.parallel_env.step(actions, agent_id)
+            done = np.logical_or(done, step_types == StepType.LAST)
+            
             obs = self.preprocess_obs_for_agent(obs_raw, agent)
             level_obs, level_info = agent.shape_level(obs)
             for i, action in enumerate(actions):
                 level_info[i]['action'] = -1
                 level_info[i]['step'] = step+1
                 level_info[i]['state'] = i
+                
+            state_info.extend(level_info[valid_states==done]) 
              
             
             # convert moves
@@ -183,8 +187,7 @@ class HanabiParallelSession:
 #             total_risky_moves[valid_states] += risky_moves[valid_states]
 #             total_bad_discards[valid_states] += bad_discards[valid_states]
 
-            done = np.logical_or(done, step_types == StepType.LAST)
-            state_info.extend(level_info[valid_states==done])  
+             
             
             if print_intermediate:
 #                 step_rewards.append({"terminated": np.sum(done),

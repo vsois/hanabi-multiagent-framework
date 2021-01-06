@@ -133,9 +133,10 @@ class HanabiParallelEnvironment:
         return obs
     
     def encode(self, obs):
-        vec_obs = np.array(self._parallel_env.encode_observation(obs))
-        vec_lms = np.array(self._parallel_env.encode_legal_moves(obs))
-        return (vec_obs, vec_lms)
+        #vec_obs = np.array(self._parallel_env.encode_observation(obs))
+        #vec_lms = np.array(self._parallel_env.encode_legal_moves(obs))
+        v_obs, v_lms = self._parallel_env.encode(obs)
+        return (np.array(v_obs), np.array(v_lms))
     
     def get_moves(self, uids):
         """convert uids to hanabi move objects"""
