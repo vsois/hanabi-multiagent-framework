@@ -160,11 +160,11 @@ class HanabiParallelSession:
             # get new observation based on action
             obs_raw, reward, step_types = self.parallel_env.step(actions, agent_id)
             obs = self.preprocess_obs_for_agent(obs_raw, agent)
-#             level_obs, level_info = agent.shape_level(obs)
-#             for i, action in enumerate(actions):
-#                 level_info[i]['action'] = -1
-#                 level_info[i]['step'] = step+1
-#                 level_info[i]['state'] = i
+            level_obs, level_info = agent.shape_level(obs)
+            for i, action in enumerate(actions):
+                level_info[i]['action'] = -1
+                level_info[i]['step'] = step+1
+                level_info[i]['state'] = i
              
             
             # convert moves
