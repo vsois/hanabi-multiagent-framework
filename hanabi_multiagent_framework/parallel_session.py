@@ -127,6 +127,7 @@ class HanabiParallelSession:
             # calculate level and add basic info
             level_obs, level_info = agent.shape_level(obs)
             for i, action in enumerate(actions):
+                level_info[i]['level'] = level_obs[i]
                 level_info[i]['action'] = action
                 level_info[i]['step'] = step
                 level_info[i]['state'] = i   
