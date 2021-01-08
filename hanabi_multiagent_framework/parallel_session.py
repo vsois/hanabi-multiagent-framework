@@ -164,6 +164,7 @@ class HanabiParallelSession:
             obs = self.preprocess_obs_for_agent(obs_raw, agent)
             level_obs, level_info = agent.shape_level(obs)
             for i, action in enumerate(actions):
+                level_info[i]['level'] = level_obs[i]
                 level_info[i]['action'] = -1
                 level_info[i]['step'] = step+1
                 level_info[i]['state'] = i

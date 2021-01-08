@@ -118,7 +118,8 @@ class HanabiParallelEnvironment:
         return self._parallel_env.observe_agent(agent_id)
     
     def observe_states(self, agent_id, states):
-        return [self._parallel_env.observe_agent(agent_id, idx) for idx in states]
+        return self._parallel_env.observe_agent(agent_id, states)
+        #return [self._parallel_env.observe_agent(agent_id, idx) for idx in states]
 
     def reset(self) -> np.ndarray:
         """Resets the environment for a new game. Should be called once after
