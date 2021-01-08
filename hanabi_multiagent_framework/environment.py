@@ -136,7 +136,7 @@ class HanabiParallelEnvironment:
     def encode(self, obs):
         #vec_obs = np.array(self._parallel_env.encode_observation(obs))
         #vec_lms = np.array(self._parallel_env.encode_legal_moves(obs))
-        print(len(obs), obs)
+        print(obs)
         v_obs, v_lms = self._parallel_env.encode(obs)
         return (np.array(v_obs), np.array(v_lms))
     
