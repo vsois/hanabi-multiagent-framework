@@ -14,6 +14,8 @@ from .utils import eval_pretty_print
 from hanabi_agents.rlax_dqn import RewardShaper#, ShapingType
 from _cffi_backend import typeof
 import timeit
+import feather
+import pandas as pd
 import copy
 from hanabi_learning_environment import pyhanabi_pybind as pyhanabi
 
@@ -211,7 +213,9 @@ class HanabiParallelSession:
         if dest is not None:
             np.save(dest + "_step_rewards.npy", step_rewards)
             np.save(dest + "_total_rewards.npy", total_reward)
-            np.save(dest + "_level_info.npy", state_info)
+            #np.save(dest + "_level_info.npy", state_info)
+            df = pd.DataFrame(state_info)
+            df.to_feather(dest + "_level_info.ftr")
 #             np.save(dest + "_move_eval.npy", {"play": total_play_moves,
 #                 "risky": total_risky_moves,
 #                 "bad_discard": total_bad_discards,
