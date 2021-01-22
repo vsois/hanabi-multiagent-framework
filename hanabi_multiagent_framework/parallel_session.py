@@ -145,7 +145,7 @@ class HanabiParallelSession:
             # playability
             counter = 0
             step_playability = []
-            for o, m in zip(self._cur_obs, moves):
+            for o, m in zip(obs_raw, moves):
                 if m.move_type == pyhanabi.HanabiMove.Type.kPlay and valid_states[counter]:
                     try:
                         prob = o.playable_percent()[m.card_index]
