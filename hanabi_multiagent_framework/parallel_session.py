@@ -135,7 +135,7 @@ class HanabiParallelSession:
             
             state_info.extend(level_info[valid_states])
 
-            #moves = self.parallel_env.get_moves(actions)
+            moves = self.parallel_env.get_moves(actions)
             # get shaped rewards
             #reward_shaping agent.shape_rewards(obs, moves)
             
@@ -143,17 +143,17 @@ class HanabiParallelSession:
             #bad_discards = shape_type == ShapingType.DISCARD_LAST_OF_KIND
 
             # playability
-#             counter = 0
-#             step_playability = []
-#             for o, m in zip(self._cur_obs, moves):
-#                 if m.move_type == pyhanabi.HanabiMove.Type.kPlay and valid_states[counter]:
-#                     try:
-#                         prob = o.playable_percent()[m.card_index]
-#                         playability[counter].append(prob)
-#                         step_playability.append(prob)
-#                     except IndexError:
-#                         pass
-#                 counter += 1
+            counter = 0
+            step_playability = []
+            for o, m in zip(self._cur_obs, moves):
+                if m.move_type == pyhanabi.HanabiMove.Type.kPlay and valid_states[counter]:
+                    try:
+                        prob = o.playable_percent()[m.card_index]
+                        playability[counter].append(prob)
+                        step_playability.append(prob)
+                    except IndexError:
+                        pass
+                counter += 1
 
             # moves
 #             for idx, a in enumerate(actions):
@@ -204,7 +204,8 @@ class HanabiParallelSession:
 #                     "playability": step_playability})
 
                 step_rewards.append({"terminated": np.sum(done),
-                                     "rewards" : reward[valid_states]})
+                                     "rewards" : reward[valid_states],
+                                     "playability": step_playability})
 
             step += 1
 
@@ -214,16 +215,10 @@ class HanabiParallelSession:
         if dest is not None:
             np.save(dest + "_step_rewards.npy", step_rewards)
             np.save(dest + "_total_rewards.npy", total_reward)
-            #np.save(dest + "_level_info.npy", state_info)
+            np.save(dest + "playability.npy", playability)
             df = pd.DataFrame(state_info)
             df.to_feather(dest + "_level_info.ftr")
-#             np.save(dest + "_move_eval.npy", {"play": total_play_moves,
-#                 "risky": total_risky_moves,
-#                 "bad_discard": total_bad_discards,
-#                 "discard": total_discard_moves,
-#                 "reveal": total_reveal_moves,
-#                 "playability": playability,
-#                 "moves": move_eval})
+            
         
         # store the average reward as performance parameter in reward shaping
 #         for agent in self.agents.agents:
