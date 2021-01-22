@@ -104,7 +104,7 @@ class HanabiParallelSession:
 #         total_bad_discards = np.zeros((self.n_states))
         state_info = []
         step_rewards = []
-#         playability = [[] for i in range(self.n_states)]
+        playability = [[] for i in range(self.n_states)]
 #         move_eval = [[] for i in range(self.n_states)]
         step_types = self.parallel_env.step_type
 
