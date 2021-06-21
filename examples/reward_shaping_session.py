@@ -3,28 +3,43 @@ import numpy as np
 import gin
 import hanabi_multiagent_framework as hmf
 from hanabi_multiagent_framework.utils import make_hanabi_env_config
-from hanabi_agents.rlax_dqn import DQNAgent, RlaxRainbowParams
+from hanabi_agents.rlax_dqn import DQNAgent, RlaxRainbowParams, AgentType
 from hanabi_agents.rlax_dqn import RewardShapingParams, RewardShaper
+#from hanabi_agents.rule_based import RulebasedParams, RulebasedAgent
+#from hanabi_agents.rule_based.predefined_rules import piers_rules, piers_rules_adjusted
 import logging
 import time
 
+from pympler.tracker import SummaryTracker
 
 def load_agent(env):
     
+    # load reward shaping infos
     reward_shaping_params = RewardShapingParams()
-    reward_shaper = RewardShaper(reward_shaping_params)
+    if reward_shaping_params.shaper:
+        reward_shaper = RewardShaper(reward_shaping_params)
+    else:
+        reward_shaper = None
     
-    agent_params = RlaxRainbowParams()
-    return DQNAgent(env.observation_spec_vec_batch()[0],
-                    env.action_spec_vec(),
-                    agent_params,
-                    reward_shaper)
+    # load agent based on type
+    agent_type = AgentType()
+    
+    if agent_type.type == 'rainbow':
+        agent_params = RlaxRainbowParams()
+        return DQNAgent(env.observation_spec_vec_batch()[0],
+                        env.action_spec_vec(),
+                        agent_params,
+                        reward_shaper)
+        
+    elif agent_type.type == 'rulebased':        
+        agent_params = RulebasedParams()
+        return RulebasedAgent(agent_params.ruleset)
 
 
 @gin.configurable(blacklist=['output_dir', 'self_play'])
 def session(
             #agent_config_path=None,
-            hanabi_game_type="Hanabi-Small",
+            hanabi_game_type="Hanabi-Full",
             n_players: int = 2,
             max_life_tokens: int = None,
             n_parallel: int = 32,
@@ -37,10 +52,12 @@ def session(
             self_play: bool = True,
             output_dir = "/output",
             start_with_weights=None,
-            n_backup = 500
+            n_backup = 500, 
+            restore_weights = None
     ):
     
     print(epochs, n_parallel, n_parallel_eval)
+    #tracker = SummaryTracker()
     
     # create folder structure
     os.makedirs(os.path.join(output_dir, "weights"))
@@ -75,6 +92,8 @@ def session(
         with gin.config_scope('agent_0'):
             
             agent = load_agent(env)
+            if restore_weights is not None:
+                agent.restore_weights(restore_weights, restore_weights)
             agents = [agent for _ in range(n_players)]
             logger.info("self play")
             logger.info("Agent Config\n" + str(agent))
@@ -87,10 +106,9 @@ def session(
           
         for i in range(n_players):
             with gin.config_scope('agent_'+str(i)): 
-                
-                logger.info("Agent Config " + i + " \n" + str(agent))
-                logger.info("Reward Shaper Config\n" + str(agent.reward_shaper))
                 agent = load_agent(env)
+                logger.info("Agent Config " + str(i) + " \n" + str(agent))
+                logger.info("Reward Shaper Config\n" + str(agent.reward_shaper))
                 agents.append(agent)
                 
     # load previous weights            
@@ -111,13 +129,21 @@ def session(
     mean_reward_prev = parallel_eval_session.run_eval().mean()
     
     # calculate warmup period
-    n_warmup = int(350 * n_players / n_parallel)
+    n_warmup = int(350 * n_players / n_parallel) + n_players
 
     # start time
     start_time = time.time()
+
+    # activate store_td
+    for a in agents:
+      if epoch_offset < 50:
+        a.store_td=True
+      else:
+        a.store_td=False
+    print('store TD', agents[0].store_td)
     
     # start training
-    for epoch in range(epoch_offset, epochs + epoch_offset):
+    for epoch in range(epoch_offset+4, epochs + epoch_offset, 5):
         
         # train
         parallel_session.train(n_iter=eval_freq,
@@ -129,31 +155,55 @@ def session(
         n_warmup = 0
         
         # print number of train steps
-        if self_play:
-            print("step", (epoch + 1) * eval_freq * n_train_steps * n_players)
-        else:
-            print("step", (epoch + 1) * eval_freq * n_train_steps)
+        print("step", agents[0].train_step)
+        #if self_play:
+        #    print("step", (epoch + 1) * eval_freq * n_train_steps * n_players)
+        #else:
+        #    print("step", (epoch + 1) * eval_freq * n_train_steps)
         
         # evaluate
+        output_path = os.path.join(output_dir, "stats", str(epoch))
         mean_reward = parallel_eval_session.run_eval(
-            dest=os.path.join(output_dir, "stats", str(epoch))
+            dest=output_path,
+            store_steps=False,
+            store_moves=False
             ).mean()
+            
+        stochasticity = agents[0].get_stochasticity()
+        np.save(output_path + "_stochasticity.npy", stochasticity)
+
+        #drawn_td = agents[0].get_drawn_tds(deactivate=False)
+        #np.save(output_path + "_drawn_tds.npy", drawn_td)
+        
+        if (epoch +1) % 50 == 0:
+            buffer_td = agents[0].get_buffer_tds()
+            np.save(output_path + "_buffer_tds.npy", buffer_td)
+        
+        if (epoch+1) < 50:
+            drawn_td = agents[0].get_drawn_tds(deactivate=False)
+            np.save(output_path + "_drawn_tds.npy", drawn_td)
+        elif (epoch+1) == 50:
+            drawn_td = agents[0].get_drawn_tds(deactivate=True)
+            np.save(output_path + "_drawn_tds.npy", drawn_td)
 
         # compare to previous iteration and store checkpoints
         if (epoch + 1) % n_backup == 0:
             
             print('save weights', epoch)
+            only_weights = False#True if (epoch + 1) < epochs + epoch_offset else False
             
             if self_play:
                 agents[0].save_weights(
                     os.path.join(output_dir, "weights", "agent_0"), 
-                    "ckpt_" + str(agents[0].train_step))
+                    "ckpt_" + str(agents[0].train_step),
+                    only_weights=only_weights)
                 
             else:
                 for aid, agent in enumerate(agents):
                     agent.save_weights(
                         os.path.join(output_dir, "weights", "agent_" + str(aid)), 
-                        "ckpt_" + str(agents[0].train_step))
+                        "ckpt_" + str(agent.train_step),
+                        only_weights=only_weights)
                     
         # store the best network
         if mean_reward_prev < mean_reward:
@@ -172,13 +222,26 @@ def session(
         # logging
         logger.info("epoch {}: duration={}s    reward={}".format(epoch, time.time()-start_time, mean_reward))
         start_time = time.time()
+
+        #tracker.print_diff()
         
         
 def linear_schedule(val_start, val_end, n_steps):
     
     def schedule(step):
         increase = (val_end - val_start) / n_steps
-        return min(val_end, val_start + step * increase)
+        if val_end > val_start:
+            return min(val_end, val_start + step * increase)
+        else:
+            return max(val_end, val_start + step * increase)
+    
+    return schedule
+
+
+def exponential_schedule(val_start, val_end, decrease):
+    
+    def schedule(step):
+        return max(val_start * (decrease**step), val_end)
     
     return schedule
 
@@ -195,11 +258,13 @@ def ramp_schedule(val_start, val_end, n_steps):
 def schedule_beta_is(value_start, value_end, steps):
     return linear_schedule(value_start, value_end, steps)
 
+@gin.configurable
+def schedule_epsilon(value_start=1, value_end=0, steps=50*2000):
+    return linear_schedule(value_start, value_end, steps)
 
 @gin.configurable
-def schedule_risk_penalty(value_start, value_end, steps):
-    return ramp_schedule(value_start, value_end, steps)
-     
+def schedule_tau(value_start=1, value_end=0.0001, decrease=0.99995):
+    return exponential_schedule(value_start, value_end, decrease)
         
 def main(args):
     
@@ -216,34 +281,12 @@ if __name__ == "__main__":
     import json
     parser = argparse.ArgumentParser(description="Train a dm-rlax based rainbow agent.")
 
-#     parser.add_argument(
-#         "--hanabi_game_type", type=str, default="Hanabi-Small-Oracle",
-#         help='Can be "Hanabi-{VerySmall,Small,Full}-{Oracle,CardKnowledge}"')
-#     parser.add_argument("--n_players", type=int, default=2, help="Number of players.")
-#     parser.add_argument(
-#         "--max_life_tokens", type=int, default=None,
-#         help="Set a different number of life tokens.")
-# #     parser.add_argument(
-# #         "--n_parallel", type=int, default=32,
-# #         help="Number of games run in parallel during training.")
     parser.add_argument(
         "--self_play", default=False, action='store_true',
         help="Whether the agent should play with itself, or an independent agent instance should be created for each player.")
-#     parser.add_argument(
-#         "--n_train_steps", type=int, default=4,
-#         help="Number of training steps made in each iteration. One iteration consists of n_sim_steps followed by n_train_steps.")
-#     parser.add_argument(
-#         "--n_sim_steps", type=int, default=2,
-#         help="Number of environment steps made in each iteration.")
-#     parser.add_argument(
-#         "--epochs", type=int, default=1_000_000,
-#         help="Total number of rotations = epochs * eval_freq.")
-# #     parser.add_argument(
-# #         "--eval_n_parallel", type=int, default=1_000,
-# #         help="Number of parallel games to use for evaluation.")
-#     parser.add_argument(
-#         "--eval_freq", type=int, default=500,
-#         help="Number of iterations to perform between evaluations.")
+    parser.add_argument(
+        "--restore_weights", type=str, default=None,
+        help="Path to weights of pretrained agent.")
     parser.add_argument(
         "--agent_config_path", type=str, default=None,
         help="Path to gin config file for rlax rainbow agent.")
@@ -258,4 +301,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     #main(**vars(args))  
-    main(args)                     
+    main(args) 
+            
